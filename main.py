@@ -1,10 +1,13 @@
 import os
+import shutil
+import socket
+import subprocess
 import sys
 from pathlib import Path
 from timeit import default_timer as timer
 
 try:
-    from yt_dlp import DownloadError, YoutubeDL
+    import yt_dlp  # noqa: F401
 except ImportError:
     print("Missing dependency: yt-dlp")
     print("Install it with: python -m pip install yt-dlp")
@@ -26,46 +29,71 @@ def clear_bash_terminal():
     os.system("cls" if os.name == "nt" else "clear")
 
 
+def can_reach_youtube(host="www.youtube.com", port=443, timeout=5):
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
 def get_download_options():
     destination.mkdir(parents=True, exist_ok=True)
     return {
         "format": "best[ext=mp4]/best",
-        "noplaylist": True,
-        "outtmpl": str(destination / "%(title)s.%(ext)s"),
-        "quiet": True,
-        "noprogress": True,
+        "output": str(destination / "%(title)s.%(ext)s"),
     }
 
 
-def get_video_info(link):
-    with YoutubeDL(get_download_options()) as ydl:
-        return ydl.extract_info(link, download=False)
+def build_yt_dlp_command(link):
+    options = get_download_options()
+    command = [
+        sys.executable,
+        "-m",
+        "yt_dlp",
+        "--no-playlist",
+        "--format",
+        options["format"],
+        "--output",
+        options["output"],
+    ]
+
+    if shutil.which("node"):
+        command.extend(["--js-runtimes", "node"])
+
+    command.append(link)
+    return command
 
 
 def download_video(link):
-    try:
-        info = get_video_info(link)
-        title = info.get("title", "video")
-        print(f'\nGetting {BOLD}{WARNING}"{title}"{ENDC} video...')
-        print(f'Attempting to download {BOLD}{OKBLUE}"{title}"{ENDC}...\n')
+    print(f"\n{BOLD}{WARNING}Starting download...{ENDC}\n")
 
-        with YoutubeDL(get_download_options()) as ydl:
-            ydl.download([link])
+    result = subprocess.run(build_yt_dlp_command(link), check=False)
 
+    if result.returncode == 0:
         end_timer = timer()
         print(
-            f'{BOLD}{OKGREEN}"{title}"{ENDC} download completed successfully in '
+            f"{BOLD}{OKGREEN}Download completed successfully{ENDC} in "
             f"{end_timer - start_timer:.4f} seconds!"
         )
         print(f"Saved to: {destination}")
-    except DownloadError as exc:
-        print(f"{FAIL}Download failed:{ENDC} {exc}")
-    except Exception as exc:
-        print(f"{FAIL}An unexpected error occurred:{ENDC} {exc}")
+        return
+
+    print(
+        f"{FAIL}Download failed.{ENDC} yt-dlp exited with status "
+        f"{result.returncode}."
+    )
 
 
 if __name__ == "__main__":
     clear_bash_terminal()
     youtube_link = input("Enter the YouTube video URL: ").strip()
+    if not can_reach_youtube():
+        print(
+            f"{FAIL}Cannot reach YouTube right now.{ENDC} "
+            "Please check your internet or DNS connection and try again."
+        )
+        sys.exit(1)
+
     start_timer = timer()
     download_video(youtube_link)
