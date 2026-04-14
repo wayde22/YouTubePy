@@ -3,6 +3,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 from timeit import default_timer as timer
 
@@ -35,6 +36,22 @@ def can_reach_youtube(host="www.youtube.com", port=443, timeout=5):
             return True
     except OSError:
         return False
+
+
+def wait_for_youtube_connection(attempts=3, delay_seconds=10):
+    for attempt in range(1, attempts + 1):
+        if can_reach_youtube():
+            return True
+
+        if attempt < attempts:
+            print(
+                f"{WARNING}Could not reach YouTube.{ENDC} "
+                f"Retrying in {delay_seconds} seconds "
+                f"({attempt}/{attempts})..."
+            )
+            time.sleep(delay_seconds)
+
+    return False
 
 
 def get_download_options():
@@ -88,10 +105,11 @@ def download_video(link):
 if __name__ == "__main__":
     clear_bash_terminal()
     youtube_link = input("Enter the YouTube video URL: ").strip()
-    if not can_reach_youtube():
+    if not wait_for_youtube_connection():
         print(
             f"{FAIL}Cannot reach YouTube right now.{ENDC} "
-            "Please check your internet or DNS connection and try again."
+            "Checked 3 times over 30 seconds. Please check your internet or DNS "
+            "connection and try again."
         )
         sys.exit(1)
 
