@@ -94,24 +94,69 @@ def download_video(link):
             f"{end_timer - start_timer:.4f} seconds!"
         )
         print(f"Saved to: {destination}")
-        return
+        return True
 
     print(
         f"{FAIL}Download failed.{ENDC} yt-dlp exited with status "
         f"{result.returncode}."
     )
+    return False
+
+
+def parse_links(raw_links):
+    return [link.strip() for link in raw_links.split(",") if link.strip()]
+
+
+def collect_links():
+    print("Paste one or more YouTube URLs.")
+    print("You can separate them with commas or put each URL on its own line.")
+    print("Press Enter on a blank line when you are done.\n")
+
+    lines = []
+    while True:
+        line = input()
+        if not line.strip():
+            break
+        lines.append(line.strip())
+
+    return parse_links(",".join(lines))
+
+
+def print_remaining_videos(links):
+    print(f"\n{FAIL}Videos not downloaded:{ENDC}")
+    for index, link in enumerate(links, start=1):
+        print(f"{index}. {link}")
+
+
+def download_videos(links):
+    total_videos = len(links)
+
+    for index, link in enumerate(links, start=1):
+        print(
+            f"\n{BOLD}Video {index} of {total_videos}{ENDC}\n"
+            f"URL: {link}"
+        )
+
+        if not wait_for_youtube_connection():
+            print(
+                f"{FAIL}Cannot reach YouTube right now.{ENDC} "
+                "Checked 3 times over 30 seconds before this video."
+            )
+            print_remaining_videos(links[index - 1 :])
+            return
+
+        if not download_video(link):
+            print_remaining_videos(links[index - 1 :])
+            return
 
 
 if __name__ == "__main__":
     clear_bash_terminal()
-    youtube_link = input("Enter the YouTube video URL: ").strip()
-    if not wait_for_youtube_connection():
-        print(
-            f"{FAIL}Cannot reach YouTube right now.{ENDC} "
-            "Checked 3 times over 30 seconds. Please check your internet or DNS "
-            "connection and try again."
-        )
+    links = collect_links()
+
+    if not links:
+        print(f"{FAIL}No valid YouTube URLs were entered.{ENDC}")
         sys.exit(1)
 
     start_timer = timer()
-    download_video(youtube_link)
+    download_videos(links)
